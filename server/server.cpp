@@ -16,6 +16,8 @@
 #include </usr/include/mysql_driver.h>       // MySQL驱动头文件
 #include <mysql_connection.h>  // 连接类头文件
 #include <cppconn/prepared_statement.h> // 预处理语句
+#include </usr/include/x86_64-linux-gnu/curl/curl.h>
+#include <time.h>
 
 
 using namespace std;
@@ -77,11 +79,14 @@ private:
             string type = req["type"];
 
             if(type == "register") {
+                cout<<"2"<<endl;
                 handleRegister(client_fd, req);
             } else if(type == "login") {
                 handleLogin(client_fd, req);
             } else if(type == "msg") {
                 handleMessage(client_fd, req);
+            }else if(type == "send_code") {
+                handleForgotPassword(client_fd, req);
             }
         } catch(const exception& e) {
             json err;
@@ -95,16 +100,20 @@ private:
     void handleRegister(int fd, const json& req) {
         string username = req["username"];
         string password = req["password"];
-        cout<<username<<password<<endl;
+        string qq= req["qq"];
+        string email=req["email"];
+        cout<<username<<password<<qq<<endl;
         unique_ptr<Connection> con(getDBConnection());
         unique_ptr<PreparedStatement> stmt(
-            con->prepareStatement("INSERT INTO users (username, password) VALUES (?, ?)")
+            con->prepareStatement("INSERT INTO users (username, password,qq,email) VALUES (?, ?, ?, ?)")
         );
 
         json response;
         try {
             stmt->setString(1, username);
             stmt->setString(2, password);
+            stmt->setString(3, qq);
+            stmt->setString(4, email);
             stmt->executeUpdate();
             response["success"] = true;
             response["message"] = "注册成功";
@@ -151,7 +160,155 @@ private:
         }
         send(fd, response.dump().c_str(), response.dump().size(), 0);
     }
+    void handleForgotPassword(int fd, const json& req)
+    {
+        string qq = req["qq"];
+        unique_ptr<sql::Connection> con(getDBConnection());
+        unique_ptr<PreparedStatement> stmt(
+        con->prepareStatement("SELECT email FROM users WHERE qq = ?")
+        );
+        stmt->setString(1, qq);
+        json response;
+        try {
+        unique_ptr<ResultSet> res(stmt->executeQuery());
+        if(res->next()) {
+            string email = res->getString("email");
+            string token = generateSecureToken(); // 生成安全令牌
+            
+            // 存储令牌到数据库
+            unique_ptr<PreparedStatement> updateStmt(
+                con->prepareStatement("UPDATE users SET token=?, token_expire=DATE_ADD(NOW(), INTERVAL 1 HOUR) WHERE qq=?")
+            );
+            updateStmt->setString(1, token);
+            updateStmt->setString(2, qq);
+            updateStmt->executeUpdate();
 
+            // 发送QQ邮箱
+            sendQQEmail(email, token);
+            
+            response["success"] = true;
+            response["message"] = "重置邮件已发送至QQ邮箱";
+        } else {
+            response["success"] = false;
+            response["message"] = "未找到关联的QQ账号";
+        }
+        } catch(SQLException &e) {
+        response["success"] = false;
+        response["message"] = "数据库错误";
+        }
+        send(fd, response.dump().c_str(), response.dump().size(), 0);
+        char buffer[4096];
+        ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
+        if(bytes_read <= 0) {
+            close(fd);
+            return;
+        }
+        json reqq = json::parse(string(buffer, bytes_read));
+        string type=reqq["type"];
+        if(type=="verify_code")
+        {
+            handleVerifyCode(fd,reqq);
+        }
+        else
+        {
+            return;
+        }
+    }
+    void handleVerifyCode(int fd, const json& req) 
+    {
+        string qq = req["qq"];
+        string client_code = req["code"];
+        
+        unique_ptr<sql::Connection> con(getDBConnection());
+        unique_ptr<sql::PreparedStatement> stmt(
+            con->prepareStatement(
+                "SELECT token FROM users "
+                "WHERE qq=? AND token_expire > NOW()" // 同时检查有效期
+            )
+        );
+        stmt->setString(1, qq);
+        
+        json response;
+        try {
+            unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+            if (res->next()) {
+                string db_code = res->getString("token");
+                
+                if (db_code == client_code) {
+                    // 标记验证通过（不生成令牌）
+                    response["success"] = true;
+                    response["message"] = "验证通过";
+                } else {
+                    response["success"] = false;
+                    response["message"] = "验证码不匹配";
+                }
+            } else {
+                response["success"] = false;
+                response["message"] = "验证码已过期";
+            }
+        } catch (sql::SQLException &e) {
+            response["success"] = false;
+            response["message"] = "数据库错误：" + string(e.what());
+        }
+        send(fd, response.dump().c_str(), response.dump().size(), 0);
+
+    }
+
+    void sendQQEmail(const std::string& to, const std::string& code)
+    {
+        CURL* curl = curl_easy_init();
+        if (curl) {
+            // 配置发件人和SMTP信息
+            const std::string from = "2281409362@qq.com";
+            const std::string password = "your_smtp_password"; // QQ邮箱授权码
+
+            // 构建邮件内容（纯文本）
+            const std::string data =
+                "From: " + from + "\r\n"
+                "To: " + to + "\r\n"
+                "Subject: 验证码通知\r\n\r\n"
+                "您的验证码是：" + code;
+
+            // 设置CURL选项
+            curl_easy_setopt(curl, CURLOPT_URL, "smtps://smtp.qq.com:465");
+            curl_easy_setopt(curl, CURLOPT_USERNAME, from.c_str());
+            curl_easy_setopt(curl, CURLOPT_PASSWORD, password.c_str());
+            curl_easy_setopt(curl, CURLOPT_MAIL_FROM, from.c_str());
+
+            struct curl_slist* recipients = NULL;
+            recipients = curl_slist_append(recipients, to.c_str());
+            curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
+
+            // 直接发送邮件内容（无需MIME）
+            curl_easy_setopt(curl, CURLOPT_READFUNCTION, NULL);
+            curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.c_str());
+
+            // 启用SSL
+            curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
+
+            // 执行发送
+            CURLcode res = curl_easy_perform(curl);
+            if (res != CURLE_OK) {
+                std::cerr << "邮件发送失败: " << curl_easy_strerror(res) << std::endl;
+            }
+
+            // 清理资源
+            curl_slist_free_all(recipients);
+            curl_easy_cleanup(curl);
+        }
+    }
+    string generateSecureToken()
+    {
+        srand(time(NULL));
+        string token;
+        for (int i = 0; i < 6; i++) 
+        {
+            int digit = rand() % 10; // 生成0到9之间的随机数
+            token += digit + '0';  // 将数字转换为字符
+        }
+        return token;
+    }
     // 处理消息转发
     void handleMessage(int fd, const json& req) {
         lock_guard<mutex> lock(online_mutex);
@@ -234,4 +391,4 @@ int main(int argc, char* argv[]) {
     //ChatServer server(8080);
     server.run();
     return 0;
-}# chatroom
+}
