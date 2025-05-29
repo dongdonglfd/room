@@ -9,6 +9,7 @@
 #include <termios.h> // 密码输入处理
 #include <iomanip>
 #include <nlohmann/json.hpp>
+#include </usr/include/x86_64-linux-gnu/curl/curl.h>
  
 using json = nlohmann::json;
 #define PORT 8080
@@ -48,8 +49,9 @@ private:
         std::cout << "\n========= 欢迎使用聊天系统 =========\n";
         std::cout << "1. 登录\n";
         std::cout << "2. 注册\n";
-        std::cout << "3. 退出\n";
-        std::cout << "请选择操作 (1-3): ";
+        std::cout << "3. 忘记密码\n";
+        std::cout << "4. 退出\n";
+        std::cout << "请选择操作 (1-4): ";
     }
 
     // 处理登录流程
@@ -85,11 +87,13 @@ private:
 
     // 处理注册流程
     void processRegistration() {
-        std::string username, password;
+        std::string username, password,qq;
         
         std::cout << "\n====== 用户注册 ======\n";
         std::cout << "用户名: ";
         std::getline(std::cin, username);
+        std::cout << "QQ号码: ";
+        std::getline(std::cin, qq);
         password = getPassword("密码: ");
         std::string confirm_pwd = getPassword("确认密码: ");
 
@@ -97,11 +101,13 @@ private:
             std::cerr << "\n错误: 两次输入的密码不一致\n";
             return;
         }
-
+        
         json request;
         request["type"] = "register";
         request["username"] = username;
         request["password"] = password;
+        request["qq"] = qq;
+        request["email"] = qq + "@qq.com"; // 自动绑定QQ邮箱
         sendMessage(request.dump());
 
         std::string response = receiveMessage();
@@ -112,6 +118,73 @@ private:
         } else {
             std::cerr << "\n注册失败: " << result["message"] << std::endl;
         }
+    }
+    //忘记密码流程
+    void handleForgotPassword()
+    {
+        // 第一步：输入QQ号
+    std::string qq;
+    std::cout << "\n====== 密码找回 ======\n";
+    std::cout << "请输入QQ号：";
+    std::getline(std::cin, qq);
+
+    // 发送验证码请求
+    json codeReq;
+    codeReq["type"] = "send_code";
+    codeReq["qq"] = qq;
+    sendMessage(codeReq.dump());
+    
+    // 处理响应
+    std::string response = receiveMessage();
+    json result = json::parse(response);
+    if(!result["success"]) {
+        std::cerr << "错误：" << result["message"] << std::endl;
+        return;
+    }
+
+    // 第二步：输入验证码
+    std::string code;
+    std::cout << "请输入6位验证码：";
+    std::getline(std::cin, code);
+
+    // 验证验证码
+    json verifyReq;
+    verifyReq["type"] = "verify_code";
+    verifyReq["qq"] = qq;
+    verifyReq["code"] = code;
+    sendMessage(verifyReq.dump());
+    
+    response = receiveMessage();
+    result = json::parse(response);
+    if(!result["success"]) {
+        std::cerr << "错误：" << result["message"] << std::endl;
+        return;
+    }
+
+    // 第三步：设置新密码
+    std::string newPwd, confirmPwd;
+    do {
+        newPwd = getPassword("请输入新密码：");
+        confirmPwd = getPassword("确认新密码：");
+        
+        if(newPwd != confirmPwd) {
+            std::cerr << "错误：两次输入不一致" <<std:: endl;
+        }  else {
+            break;
+        }
+    } while(true);
+
+    // 最终提交重置
+    json resetReq;
+    resetReq["type"] = "reset_password";
+    resetReq["token"] = result["token"];
+    resetReq["new_password"] = newPwd;
+    sendMessage(resetReq.dump());
+    
+    response = receiveMessage();
+    result = json::parse(response);
+    std::cout << (result["success"] ? "密码重置成功" : "重置失败") << std::endl;
+
     }
 
 public:
@@ -185,6 +258,8 @@ public:
                     processRegistration();
                     break;
                 case 3:
+                    handleForgotPassword();    
+                case 4:
                     close(sockfd);
                     exit(0);
                 default:
