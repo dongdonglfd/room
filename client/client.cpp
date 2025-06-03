@@ -1,22 +1,7 @@
-#include<iostream>
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<string.h>
-#include<arpa/inet.h>
-#include<sys/epoll.h>
-#include<string>
-#include <termios.h> // 密码输入处理
-#include <iomanip>
-#include <nlohmann/json.hpp>
-#include </usr/include/x86_64-linux-gnu/curl/curl.h>
- 
-using json = nlohmann::json;
-#define PORT 8080
-#define BUFFER_SIZE 1024
-#define MAX_EVENTS 10
-
-class Client {
+#include"friend.h"
+#include"group.h"
+class Client :public Friend ,public Group
+{
 private:
     int sockfd;
     std::string server_addr;
@@ -316,12 +301,28 @@ public:
 
         close(sockfd);
     }
-    void showMainInterface() {
-        std::cout << "\n======== 主界面 (" << current_user << ") ========\n";
-        std::cout << "可用命令:\n";
-        std::cout << "/msg <用户> <消息>  发送私聊消息\n";
-        std::cout << "/logout             退出登录\n";
-        std::cout << "==================================\n";
+    void showMainInterface() 
+    {
+        
+        while(true) {
+            std::cout << "\n==== 主菜单 ====\n"
+                 << "1. 好友管理\n"
+                 << "2. 群组管理\n"
+                 << "3. 聊天功能\n"
+                 << "4. 退出系统\n"
+                 << "请选择操作: ";
+            
+            int choice;
+            std::cin >> choice;
+            
+            switch(choice) {
+                case 1: friendMenu(sockfd,current_user); break;
+                case 2: groupMenu(sockfd,current_user); break;
+                // case 3: chatMenu(); break;
+                case 4: return;
+                default: std::cout << "无效输入!\n";
+            }
+        }
     }
 };
 int main(int argc,char **argv)
