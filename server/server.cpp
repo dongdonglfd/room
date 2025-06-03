@@ -1,69 +1,19 @@
-#include <iostream>
-#include <string>
-#include <unordered_map>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <thread>
-#include <mysql/mysql.h>
-#include <nlohmann/json.hpp>
-#include <sys/epoll.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include<fcntl.h>
-#include"threadpool.h"
-#include </usr/include/mysql_driver.h>       // MySQL驱动头文件
-#include <mysql_connection.h>  // 连接类头文件
-#include <cppconn/prepared_statement.h> // 预处理语句
-#include </usr/include/x86_64-linux-gnu/curl/curl.h>
-#include <time.h>
 
-
-using namespace std;
-using json = nlohmann::json;
-using namespace sql;
+#include"groupserver.h"
 
 
 
-// 数据库配置
-const string DB_HOST = "tcp://127.0.0.1:3306";
-const string DB_USER = "chatuser";   // 数据库账户名
-const string DB_PASS = "123";  // 数据库账户密码
-const string DB_NAME = "chat";
 
-class ChatServer {
+
+class ChatServer :public Friendserver,public groupserver
+{
 private:
     int server_fd;
     int epoll_fd;
     ThreadPool pool;
-    mutex online_mutex;
-    unordered_map<string, int> online_users; // 在线用户表
-
-    Connection* getDBConnection() {
-    try {
-        sql::mysql::MySQL_Driver *driver = sql::mysql::get_mysql_driver_instance();
-        if(!driver) {
-            cerr << "获取驱动实例失败" << endl;
-            return nullptr;
-        }
-
-        sql::Connection *con = driver->connect(DB_HOST, DB_USER, DB_PASS);
-        if(!con) {
-            cerr << "创建连接失败" << endl;
-            return nullptr;
-        }
-
-        con->setSchema(DB_NAME);
-        cout << "数据库连接成功" << endl;
-        return con;
-    } catch (sql::SQLException &e) {
-        cerr << "MySQL错误[" << e.getErrorCode() << "]: " << e.what() << endl;
-    } catch (...) {
-        cerr << "未知错误" << endl;
-    }
-    return nullptr;
-}
+    
+    string name;
+    
 
     // 处理客户端请求
     void handleClient(int client_fd) {
@@ -79,15 +29,31 @@ private:
             string type = req["type"];
 
             if(type == "register") {
-                cout<<"2"<<endl;
                 handleRegister(client_fd, req);
             } else if(type == "login") {
                 handleLogin(client_fd, req);
+                userOnline(name, client_fd);
             } else if(type == "msg") {
                 handleMessage(client_fd, req);
             }else if(type == "send_code") {
                 handleForgotPassword(client_fd, req);
+            }else if(type=="add_friend"){
+                handleAddFriend(client_fd, req);
+            }else if (type == "check_requests") {
+                handleCheckRequests(client_fd, req);
+            }else if (type == "process_request") {
+                handleProcessRequest(client_fd, req);
+            }else if(type=="get_friends"){
+                handleGetFriends(client_fd, req);
+            }else if(type=="delete_friend"){
+                handleDeleteFriend(client_fd, req);
+            }else if(type=="block_user"){
+                handleBlockUser(client_fd, req);
+            }else if(type=="create_group"){
+                handleCreateGroup(client_fd, req);
             }
+            
+
         } catch(const exception& e) {
             json err;
             err["success"] = false;
@@ -127,7 +93,7 @@ private:
 
     // 处理登录请求
     void handleLogin(int fd, const json& req) {
-        string username = req["username"];
+        string name = req["username"];
         string password = req["password"];
 
         unique_ptr<Connection> con(getDBConnection());
@@ -137,15 +103,15 @@ private:
 
         json response;
         try {
-            stmt->setString(1, username);
+            stmt->setString(1, name);
             unique_ptr<ResultSet> res(stmt->executeQuery());
             
             if(res->next()) {
                 if(res->getString("password") == password) {
                     lock_guard<mutex> lock(online_mutex);
-                    online_users[username] = fd;
+                    online_users[name] = fd;
                     response["success"] = true;
-                    response["username"] = username;
+                    response["username"] = name;
                 } else {
                     response["success"] = false;
                     response["message"] = "密码错误";
