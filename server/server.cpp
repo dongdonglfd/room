@@ -51,7 +51,24 @@ private:
                 handleBlockUser(client_fd, req);
             }else if(type=="create_group"){
                 handleCreateGroup(client_fd, req);
+            }else if(type=="disband_group"){
+                handleDisbandGroup(client_fd, req);
+            }else if(type=="get_my_groups"){
+                handleGetMyGroups(client_fd, req);
+            }else if(type=="leave_group"){
+                handleLeaveGroup(client_fd, req);
+            }else if(type=="get_user_role"){
+                handleGetUserRole(client_fd, req);
+            }else if(type=="join_group_request"){
+                handleJoinGroupRequest(client_fd, req);
+            }else if(type=="get_group_join_requests"){
+                handleGetGroupJoinRequests(client_fd, req);
+            }else if(type=="process_join_request"){
+                handleProcessJoinRequest(client_fd, req);
             }
+            
+            
+            
             
 
         } catch(const exception& e) {
