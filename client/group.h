@@ -48,19 +48,19 @@ class Group
                      << "9. 返回主菜单\n"
                      << "请选择操作: ";
             
-            int choice;
+            char choice;
             std::cin >> choice;
             
             switch(choice) {
-                 case 1: createGroup(); break;
-                 case 2: disbandGroup(); break;
-                 case 3: joinGroup(); break;
-                 case 4: showMyGroups(); break;
-                 case 5: viewGroupInfo(); break;
-                 case 6: leaveGroup(); break;
-                 case 7: manageGroupMembers(); break;
-                // case 8: groupChat(); break;
-                case 9: return;
+                 case '1': createGroup(); break;
+                 case '2': disbandGroup(); break;
+                 case '3': joinGroup(); break;
+                 case '4': showMyGroups(); break;
+                 case '5': viewGroupInfo(); break;
+                 case '6': leaveGroup(); break;
+                 case '7': manageGroupMembers(); break;
+                // case '8': groupChat(); break;
+                case '9': return;
                 default: std::cout << "无效输入!\n";
             }
         }
@@ -266,15 +266,15 @@ class Group
                      << "5. 返回\n"
                      << "请选择操作: ";
             
-            int choice;
+            char choice;
             std::cin >> choice;
             
             switch(choice) {
-                // case 1: addGroupAdmin(groupId); break;
-                // case 2: removeGroupAdmin(groupId); break;
-                 case 3: processJoinRequests(groupId); break;
-                // case 4: removeGroupMember(groupId); break;
-                case 5: return;
+                 case '1': addGroupAdmin(groupId); break;
+                 case '2': removeGroupAdmin(groupId); break;
+                 case '3': processJoinRequests(groupId); break;
+                 case '4': removeGroupMember(groupId); break;
+                 case '5': return;
                 default: std::cout << "无效输入!\n";
             }
         }
@@ -333,6 +333,78 @@ class Group
             std::cout << "✓ 操作成功\n";
         } else {
             std::cerr << "✘ 操作失败: " << res["message"] << std::endl;
+        }
+    }
+    // 添加群管理员 (群主权限)
+    void addGroupAdmin(int groupId) 
+    {
+        std::cout << "输入要设置为管理员的用户名: ";
+        std::string username;
+        std::cin >> username;
+        
+        json req;
+        req["type"] = "add_group_admin";
+        req["group_id"] = groupId;
+        req["user"] = username;
+        req["admin"] = currentUser; // 操作人
+        
+        json res = sendRequest(req);
+        
+        if (res["success"]) {
+            std::cout << "✓ " << username << " 已设为管理员\n";
+        } else {
+            std::cerr << "✘ 设置失败: " << res["message"] << std::endl;
+        }
+    }
+    // 移除群管理员 (群主权限)
+    void removeGroupAdmin(int groupId) 
+    {
+        std::cout << "输入要移除管理权限的用户名: ";
+        std::string username;
+        std::cin >> username;
+        
+        json req;
+        req["type"] = "remove_group_admin";
+        req["group_id"] = groupId;
+        req["user"] = username;
+        req["admin"] = currentUser; // 操作人
+        
+        json res = sendRequest(req);
+        
+        if (res["success"]) {
+            std::cout << "✓ " << username << " 已移除管理员\n";
+        } else {
+            std::cerr << "✘ 移除失败: " << res["message"] << std::endl;
+        }
+    }
+    // 移除群成员 (群主/管理员权限)
+    void removeGroupMember(int groupId) 
+    {
+        std::cout << "输入要移除的成员用户名: ";
+        std::string username;
+        std::cin >> username;
+        
+        // 确认操作
+        std::cout << "确定要将 " << username << " 移出群组吗? (y/n): ";
+        char confirm;
+        std::cin >> confirm;
+        if (confirm != 'y' && confirm != 'Y') {
+            std::cout << "操作取消\n";
+            return;
+        }
+
+        json req;
+        req["type"] = "remove_group_member";
+        req["group_id"] = groupId;
+        req["user"] = username;
+        req["admin"] = currentUser;
+        
+        json res = sendRequest(req);
+        
+        if (res["success"]) {
+            std::cout << "✓ " << username << " 已移出群组\n";
+        } else {
+            std::cerr << "✘ 移除失败: " << res["message"] << std::endl;
         }
     }
     
