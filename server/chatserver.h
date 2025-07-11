@@ -11,7 +11,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include<fcntl.h>
+#include <fcntl.h>
 #include"threadpool.h"
 #include </usr/include/mysql_driver.h>       // MySQL驱动头文件
 #include <mysql_connection.h>  // 连接类头文件
@@ -203,99 +203,6 @@ class Chat
         stmt->setString(2, user);
         stmt->executeUpdate();
     }   
-    // void checkUnreadMessages(int fd, const json& req)
-    // {
-    //     string username= req["user"];
-    //     unique_ptr<sql::Connection> con(getDBConnection());
-    //    // 3. 存储消息
-    //     unique_ptr<sql::PreparedStatement> msgStmt(
-    //         con->prepareStatement(
-    //             "SELECT id, sender, message, timestamp "
-    //             "FROM messages "
-    //             "WHERE receiver = ? AND delivered = 0 "
-    //         )
-    //     );
-    //     msgStmt->setString(1, username);
-    //     unique_ptr<sql::ResultSet> res(msgStmt->executeQuery());
-    //     // if(!res->next())
-    //     // {
-    //     //     std::cout << "没有未读消息" << std::endl;
-    //     // }
-    //     // else
-    //     // {
-    //     //     std::cout << "\n===== 未读消息 =====" << std::endl;
-    //     //     do {
-    //     //         std::string sender = res->getString("sender");
-    //     //         sql::SQLString timestampStr = res->getString("timestamp");
-                
-    //     //         // 转换时间戳为可读格式
-    //     //         std::tm tm = {};
-    //     //         std::istringstream ss(timestampStr);
-    //     //         ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
-    //     //         time_t timestamp = std::mktime(&tm);
-                
-    //     //         // 格式化时间
-    //     //         char timeBuffer[80];
-    //     //         std::strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", std::localtime(&timestamp));
-                
-    //     //         // 只显示发送者信息，不显示消息内容
-    //     //         std::cout << "[" << timeBuffer << "] " << sender << " 给您发了消息" << std::endl;
-                
-    //     //     } while (res->next());
-    //     // }
-    //     json response;
-    //     //response["type"] = "unread_messages";
-    //     //response["user"] = username;
-    //     if (!res->next()) 
-    //     {
-    //         // 没有未读消息
-    //         response["success"] = false;
-    //         // response["message"] = "没有未读消息";
-    //         // response["count"] = 0;
-            
-    //         // response["messages"] = json::array(); // 空数组
-            
-    //         // 发送响应
-    //         string responseStr = response.dump();
-    //         send(fd, responseStr.c_str(), responseStr.size(), 0);
-    //         return;
-    //     }
-    //     json messagesArray = json::array();
-    //     int messageCount = 0;
-
-    //     // 重置结果集指针到开头
-    //     res->beforeFirst();
-
-    //     // 遍历所有未读消息
-    //     while (res->next()) {
-    //         json messageObj;
-    //         //messageObj["id"] = res->getInt("id");
-    //         messageObj["sender"] = res->getString("sender");
-    //         //messageObj["message"] = res->getString("message");
-    //         messageObj["timestamp"] = res->getString("timestamp");
-            
-    //         messagesArray.push_back(messageObj);
-    //         //messageCount++;
-    //     }
-
-    //     // 设置响应字段
-    //     response["success"] = true;
-    //     //response["count"] = messageCount;
-    //     response["messages"] = messagesArray;
-
-    //     // 序列化响应为JSON字符串
-    //     string responseStr = response.dump();
-
-    //     // 发送响应给客户端
-    //     if (send(fd, responseStr.c_str(), responseStr.size(), 0) < 0) {
-    //         cerr << "发送未读消息响应失败: " << strerror(errno) << endl;
-    //     } else {
-    //         cout << "已发送 " << messageCount << " 条未读消息给用户 " << username << endl;
-    //     }
-
-
-
-    //}
     void checkUnreadMessages(int fd, const json& req)
     {
 
@@ -454,5 +361,158 @@ class Chat
         string responseStr = response.dump();
         send(fd, responseStr.c_str(), responseStr.size(), 0);
     }
-    
+    // void handleChatHistoryRequest(int fd, const json& request)
+    // {
+    //     string user = request["user"];
+    //     string friendName = request["friend"];
+    //     unique_ptr<sql::Connection> con(getDBConnection());
+    //     unique_ptr<sql::PreparedStatement> msgStmt(
+    //         con->prepareStatement(
+    //             "SELECT sender, recipient, message, timestamp "
+    //             "FROM private_messages "
+    //             "WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?) "
+    //             "ORDER BY timestamp ASC"// 按时间升序（从旧到新）
+    //         )
+    //     );
+    //     msgStmt->setString(1, user);
+    //     msgStmt->setString(2, friendName);
+    //     msgStmt->setString(3, friendName);
+    //     msgStmt->setString(4, user);
+    //     unique_ptr<sql::ResultSet> res(msgStmt->executeQuery());
+    //     json response;
+    //     if (!res->next()) {
+    //         // 没有未读消息
+    //         response["success"] = false;
+    //         response["messages"] = json::array();
+    //     }
+    //     else
+    //     {
+    //         json messagesArray = json::array();
+    //         // 重置结果集指针到开头
+    //         res->beforeFirst();
+    //         // 遍历所有未读消息
+    //         while (res->next()) {
+    //             json messageObj;
+    //             messageObj["sender"] = res->getString("sender");
+    //             messageObj["message"] = res->getString("message");
+    //             messageObj["timestamp"] = res->getString("timestamp");
+    //             messagesArray.push_back(messageObj);
+    //         }
+
+    //         response["success"] = true;
+    //         response["messages"] = messagesArray;
+    //     }
+    //     // 发送响应
+    //     string responseStr = response.dump();
+    //     send(fd, responseStr.c_str(), responseStr.size(), 0);
+    // }
+    void handleChatHistoryRequest(int fd, const json& request)
+    {
+        // 验证请求参数
+        if (!request.contains("user") || !request["user"].is_string() ||
+            !request.contains("friend") || !request["friend"].is_string()) {
+            json error = {
+                {"type", "error"},
+                {"message", "无效请求: 缺少必要字段"}
+            };
+            send(fd, error.dump().c_str(), error.dump().size(), 0);
+            return;
+        }
+        
+        string user = request["user"];
+        string friendName = request["friend"];
+        
+        unique_ptr<sql::Connection> con(getDBConnection());
+        if (!con) {
+            json error = {
+                {"type", "error"},
+                {"message", "数据库连接失败"}
+            };
+            send(fd, error.dump().c_str(), error.dump().size(), 0);
+            return;
+        }
+        
+        try {
+            // 准备SQL查询
+            unique_ptr<sql::PreparedStatement> msgStmt(
+                con->prepareStatement(
+                    "SELECT sender, recipient, message, timestamp "
+                    "FROM private_messages "
+                    "WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?) "
+                    "ORDER BY timestamp ASC" // 按时间升序（从旧到新）
+                )
+            );
+            msgStmt->setString(1, user);
+            msgStmt->setString(2, friendName);
+            msgStmt->setString(3, friendName);
+            msgStmt->setString(4, user);
+            
+            // 执行查询
+            unique_ptr<sql::ResultSet> res(msgStmt->executeQuery());
+            
+            // 构建响应
+            json response;
+            response["user"] = user;
+            response["friend"] = friendName;
+            
+            // 检查是否有消息
+            if (!res->next()) {
+                // 没有消息
+                response["success"] = true;
+                response["count"] = 0;
+                response["messages"] = json::array();
+            } else {
+                // 有消息
+                json messagesArray = json::array();
+                int messageCount = 0;
+                
+                // 重置结果集指针到开头
+                res->beforeFirst();
+                
+                // 遍历所有消息
+                while (res->next()) {
+                    json messageObj;
+                    
+                    // 获取字段值
+                    string sender = res->getString("sender");
+                    string recipient = res->getString("recipient");
+                    string message = res->getString("message");
+                    time_t timestamp = res->getInt64("timestamp"); // 关键修复：使用getInt64获取时间戳
+                    
+                    // 构建消息对象
+                    messageObj["sender"] = sender;
+                    messageObj["recipient"] = recipient;
+                    messageObj["message"] = message;
+                    messageObj["timestamp"] = timestamp; // 存储为整数
+                    
+                    messagesArray.push_back(messageObj);
+                    
+                }
+                
+                response["success"] = true;
+                response["messages"] = messagesArray;
+            }
+            
+            // 发送响应
+            string responseStr = response.dump();
+            send(fd, responseStr.c_str(), responseStr.size(), 0);
+            
+        } catch (sql::SQLException &e) {
+            // 数据库错误处理
+            json error = {
+                {"type", "error"},
+                {"message", "数据库查询失败: " + string(e.what())}
+            };
+            string responseStr = error.dump();
+            send(fd, responseStr.c_str(), responseStr.size(), 0);
+        } catch (const exception& e) {
+            // 其他异常处理
+            json error = {
+                {"type", "error"},
+                {"message", "处理请求失败: " + string(e.what())}
+            };
+            string responseStr = error.dump();
+            send(fd, responseStr.c_str(), responseStr.size(), 0);
+        }
+    }
 };
