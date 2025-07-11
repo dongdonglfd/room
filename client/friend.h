@@ -1,23 +1,4 @@
-#include<iostream>
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<string.h>
-#include<arpa/inet.h>
-#include<sys/epoll.h>
-#include<string>
-#include <termios.h> // 密码输入处理
-#include <iomanip>
-#include <nlohmann/json.hpp>
-#include </usr/include/x86_64-linux-gnu/curl/curl.h>
-#include<vector>
-#include <map>
-#include <algorithm>
- 
-using json = nlohmann::json;
-#define PORT 8080
-#define BUFFER_SIZE 1024
-#define MAX_EVENTS 10
+#include"chatclient.h"
 
 // // 用户数据结构
 // struct User {
@@ -36,12 +17,23 @@ class Friend
     int sock;
     std::string currentUser;        // 当前登录用户
     std::vector<std::string> friendRequests; // 待处理的好友请求
-
+    Chat chat;
     // 发送请求并获取响应
     json sendRequest(const json& req) {
         std::string requestStr = req.dump();
         send(sock, requestStr.c_str(), requestStr.size(), 0);
-
+        char buffer[4096] = {0};
+        recv(sock, buffer, 4096, 0);
+        return json::parse(buffer);
+    }
+    json sendReq(const json& req,int fd) {
+        int sock=fd;
+        std::string requestStr = req.dump();
+        ssize_t bytes_sent = send(sock, requestStr.c_str(), requestStr.size(), 0);
+        if (bytes_sent == -1) {
+        perror("send failed");
+        exit(EXIT_FAILURE);
+    } 
         char buffer[4096] = {0};
         recv(sock, buffer, 4096, 0);
         return json::parse(buffer);
@@ -58,19 +50,21 @@ class Friend
                  << "3. 屏蔽好友\n"
                  << "4. 查看好友列表\n"
                  << "5. 处理请求\n"
-                 << "6. 返回上级\n"
+                 << "6. 与好友聊天\n"
+                 << "7. 返回上级\n"
                  << "请选择操作: ";
             
-            int choice;
+            char choice;
             std::cin >> choice;
             
             switch(choice) {
-                case 1: addFriend(); break;
-                case 2: deleteFriend(); break;
-                case 3: blockFriend(); break;//处理屏蔽
-                case 4: showFriends(); break;
-                case 5: processRequest();break;//处理请求
-                case 6: return;
+                case '1': addFriend(); break;
+                case '2': deleteFriend(); break;
+                case '3': blockFriend(); break;//处理屏蔽
+                case '4': showFriends(); break;
+                case '5': processRequest();break;//处理请求
+                case '6': showFriends();chat.privateChat(sock,currentUser);break;
+                case '7': return;
                 default: std::cout << "无效输入!\n";
             }
         }
@@ -244,5 +238,91 @@ class Friend
             std::cout << "[" << i+1 << "] " << friendRequests[i] << std::endl;
         }
     }
+    // void checkUnreadMessages(string currentUser,int sockfd) 
+    // {
+    //     json request = {
+    //         {"type", "get_unread_messages"},
+    //         {"user", currentUser}
+    //     };
+
+    //     int fd=sockfd;
+    //     json req=sendReq(request,fd);
+    //     if(req["success"])
+    //     {
+    //         cout<< "\n===== 未读消息 =====" << std::endl;
+    //         for (const auto& msg : req["messages"]) 
+    //         {
+    //             time_t timestamp = msg["timestamp"];
+    //             tm* localTime = localtime(&timestamp);
+    //             char timeBuffer[80];
+    //             strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
+                
+    //             cout << "[" << timeBuffer << "] " <<"有未读消息来自"
+    //                 << msg["sender"] << endl;
+    //                 //<< //msg["message"] << endl;
+    //         }
+            
+    //         cout << "=======================" << endl;
+
+    //     }
+    //     else
+    //     {
+    //         cout<< "\n===== 无未读消息 =====" << std::endl;
+    //     }
+        
+    // }
+    void checkUnreadMessages(std::string currentUser, int sockfd) {
+    json request = {
+        {"type", "get_unread_messages"},
+        {"user", currentUser}
+    };
+
+    json req = sendReq(request, sockfd);
+    if (req.is_null() || !req.is_object()) {
+        std::cerr << "Error: Invalid response from server!" << std::endl;
+        return;
+    }
+
+    bool success = false;
+    if (req.contains("success") && req["success"].is_boolean()) {
+        success = req["success"].get<bool>();
+    }
+
+    if (success) {
+        std::cout << "\n===== 未读消息 =====" << std::endl;
+        if (req.contains("messages") && req["messages"].is_array()) {
+            for (const auto& msg : req["messages"]) {
+                // 处理 timestamp
+                time_t timestamp = 0;
+                if (msg.contains("timestamp") && msg["timestamp"].is_number()) {
+                    timestamp = msg["timestamp"].get<time_t>();
+                } else {
+                    timestamp = std::time(nullptr); // 默认当前时间
+                }
+
+                // 转换为本地时间（线程安全）
+                tm localTime;
+                localtime_r(&timestamp, &localTime);
+
+                char timeBuffer[80];
+                strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", &localTime);
+
+                // 处理 sender
+                std::string sender = "未知用户";
+                if (msg.contains("sender") && msg["sender"].is_string()) {
+                    sender = msg["sender"].get<std::string>();
+                }
+
+                std::cout << "[" << timeBuffer << "] 有未读消息来自 " << sender << std::endl;
+            }
+        } else {
+            std::cerr << "Error: 'messages' is missing or not an array!" << std::endl;
+        }
+        std::cout << "=======================" << std::endl;
+    } else {
+        std::cout << "\n===== 无未读消息 =====" << std::endl;
+    }
+}
+    
 
 };
