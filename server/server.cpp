@@ -13,7 +13,7 @@ private:
     ThreadPool pool;
     
     string name;
-    
+    Friendserver mysql;
 
     // 处理客户端请求
     void handleClient(int client_fd) {
@@ -65,6 +65,24 @@ private:
                 handleGetGroupJoinRequests(client_fd, req);
             }else if(type=="process_join_request"){
                 handleProcessJoinRequest(client_fd, req);
+            }else if(type=="get_group_info"){
+                handleGetGroupInfo(client_fd, req);
+            }else if(type=="add_group_admin"){
+                handleAddGroupAdmin(client_fd, req);
+            }else if(type=="remove_group_admin"){
+                handleRemoveGroupAdmin(client_fd, req);
+            }else if(type=="remove_group_member"){
+                handleRemoveGroupMember(client_fd, req);
+            }else if(type=="check_friend_valid"){
+                handleCheckFriendValid(client_fd, req);
+            }else if(type == "send_message") {
+                handlePrivateMessage(client_fd, req);
+            }else if(type=="ack_private_message"){
+                handleAckPrivateMessage(client_fd, req);
+            }else if(type=="get_unread_messages"){
+                checkUnreadMessages(client_fd, req);
+            }else if(type=="get_friend_unread_messages"){
+                handleGetFriendUnreadMessages(client_fd, req);
             }
             
             
@@ -86,7 +104,7 @@ private:
         string qq= req["qq"];
         string email=req["email"];
         cout<<username<<password<<qq<<endl;
-        unique_ptr<Connection> con(getDBConnection());
+        unique_ptr<Connection> con(mysql.getDBConnection());
         unique_ptr<PreparedStatement> stmt(
             con->prepareStatement("INSERT INTO users (username, password,qq,email) VALUES (?, ?, ?, ?)")
         );
@@ -113,7 +131,7 @@ private:
         string name = req["username"];
         string password = req["password"];
 
-        unique_ptr<Connection> con(getDBConnection());
+        unique_ptr<Connection> con(mysql.getDBConnection());
         unique_ptr<PreparedStatement> stmt(
             con->prepareStatement("SELECT password FROM users WHERE username = ?")
         );
@@ -146,7 +164,7 @@ private:
     void handleForgotPassword(int fd, const json& req)
     {
         string qq = req["qq"];
-        unique_ptr<sql::Connection> con(getDBConnection());
+        unique_ptr<sql::Connection> con(mysql.getDBConnection());
         unique_ptr<PreparedStatement> stmt(
         con->prepareStatement("SELECT email FROM users WHERE qq = ?")
         );
@@ -202,7 +220,7 @@ private:
         string qq = req["qq"];
         string client_code = req["code"];
         
-        unique_ptr<sql::Connection> con(getDBConnection());
+        unique_ptr<sql::Connection> con(mysql.getDBConnection());
         unique_ptr<sql::PreparedStatement> stmt(
             con->prepareStatement(
                 "SELECT token FROM users "
