@@ -89,8 +89,9 @@ public:
             // 显示主菜单
             cout << "\n===== 聊天系统主菜单 =====" << endl;
             cout << "1. 开始聊天" << endl;
-            //cout << "2. 查看未读消息统计" << endl;
-            cout << "2. 退出系统" << endl;
+            cout << "2. 查看历史聊天记录" << endl;
+            cout << "3.发送文件" << endl;
+            cout << "4. 退出系统" << endl;
             cout << "==========================" << endl;
             cout << "请选择操作: ";
             
@@ -102,22 +103,31 @@ public:
                 cout << "请输入对方用户名: ";
                 string friendName;
                 getline(cin, friendName);
-                
                 if (!friendName.empty()) {
                     startChatSession(friendName);
                 }
             }
-            //  else if (choice == "2") {
-            //     // 发送获取未读消息统计请求
-            //     json request = {
-            //         {"type", "get_unread_count"},
-            //         {"user", currentUser}
-            //     };
-            //     sendRequest(request);
+            else if (choice == "2") 
+            {
+                cout << "=====查找聊天记录=====: "<<endl;
+                cout<<"请输入对方用户名: ";
+                string friendName;
+                getline(cin, friendName);
                 
-            //     // 响应会在接收线程中处理
-            // } 
-            else if (choice == "2") {
+                if (!friendName.empty()) {
+                    queryChatHistory(friendName);
+                }
+            } 
+            if (choice == "3") {
+                // 开始聊天
+                cout << "请输入对方用户名: ";
+                string friendName;
+                getline(cin, friendName);
+                if (!friendName.empty()) {
+                    
+                }
+            }
+            else if (choice == "4") {
                 // 退出系统
                 cout << "感谢使用，再见!" << endl;
                 running = false;
@@ -162,9 +172,8 @@ public:
                     if (!inputBuffer.empty()) {
                         if (inputBuffer == "/exit") {
                             break;
-                        } else if (inputBuffer == "/history") {
-                            //viewChatHistory(friendName);
-                        } else {
+                        } 
+                        else {
                             sendMessage(friendName, inputBuffer);
                         }
                         inputBuffer.clear();
@@ -306,60 +315,6 @@ public:
                             };
                             sendRequest(ack);
                         }
-                    } 
-                    else if (type == "history_response") {
-                        // 处理历史消息响应
-                        lock_guard<mutex> lock(outputMutex); // 保护整个输出块
-                        
-                        if (message.value("success", false)) {
-                            auto messages = message["messages"];
-                            cout << "\n===== 聊天历史 =====" << endl;
-                            
-                            for (const auto& msg : messages) {
-                                string sender = msg.value("sender", "");
-                                string text = msg.value("message", "");
-                                time_t timestamp = msg.value("timestamp", time(nullptr));
-                                
-                                string timeStr = "Unknown time";
-                                tm* localTime = localtime(&timestamp);
-                                if (localTime) {
-                                    char timeBuffer[80];
-                                    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
-                                    timeStr = string(timeBuffer);
-                                }
-                                
-                                cout << "[" << timeStr << "] " << sender << ": " << text << endl;
-                            }
-                            
-                            cout << "====================" << endl;
-                        } else {
-                            cerr << "获取历史记录失败: " 
-                                << message.value("message", "未知错误") << endl;
-                        }
-                        
-                        // 如果正在聊天会话中，重新显示输入提示
-                        if (inChatSession) {
-                            cout << "> " << inputBuffer << flush;
-                        }
-                    }
-                    else if (type == "offline_notification") {
-                        // 处理离线消息通知
-                        lock_guard<mutex> lock(outputMutex); // 保护输出
-                        
-                        string sender = message.value("sender", "");
-                        int count = message.value("count", 0);
-                        
-                        cout << "\n您有 " << count << " 条来自 " << sender << " 的未读消息" << endl;
-                        cout << "输入 /history " << sender << " 查看历史消息" << endl;
-                        
-                        // 如果正在聊天会话中，重新显示输入提示
-                        if (inChatSession) {
-                            cout << "> " << inputBuffer << flush;
-                        }
-                    }
-                    else {
-                        lock_guard<mutex> lock(outputMutex);
-                        cerr << "未知消息类型: " << type << endl;
                     }
                     
                 } catch (json::parse_error& e) {
@@ -469,6 +424,117 @@ public:
                 {"friend", friendName}
             };
             sendRequest(ack);
+    }
+    
+    void queryChatHistory(const string& friendName)
+    {
+        json request = {
+            {"type", "get_chat_history"},
+            {"user", currentUser},
+            {"friend", friendName},
+        };
+        
+        std::string requestStr = request.dump();
+        
+        // 发送请求
+        if (send(sock, requestStr.c_str(), requestStr.size(), 0) < 0) {
+            perror("发送请求失败");
+            return;
+        }
+        
+        // 接收响应
+        const int initialBufferSize = 4096;
+        vector<char> buffer(initialBufferSize);
+        ssize_t totalReceived = 0;
+        
+        while (true) {
+            // 检查是否需要扩展缓冲区
+            if (totalReceived >= buffer.size() - 1) {
+                buffer.resize(buffer.size() * 2);
+            }
+            
+            // 接收数据
+            ssize_t bytesRead = recv(sock, buffer.data() + totalReceived, 
+                                    buffer.size() - totalReceived - 1, 0);
+            
+            if (bytesRead < 0) {
+                perror("接收响应失败");
+                return;
+            }
+            
+            if (bytesRead == 0) {
+                // 连接关闭
+                break;
+            }
+            
+            totalReceived += bytesRead;
+            
+            // 尝试解析 JSON
+            try {
+                // 添加终止符
+                buffer[totalReceived] = '\0';
+                
+                // 尝试解析
+                json response = json::parse(buffer.data());
+                
+                // 如果解析成功，处理响应
+                processChatHistory(response);
+                return;
+                
+            } catch (json::parse_error& e) {
+                // 如果错误不是"unexpected end of input"，继续接收更多数据
+                if (e.id != 101) {
+                    cerr << "JSON解析错误: " << e.what() << endl;
+                    cerr << "已接收数据: " << totalReceived << "字节" << endl;
+                    return;
+                }
+            }
+        }
+        
+        // 如果循环结束但未解析成功
+        cerr << "无法解析服务器响应" << endl;
+    }
+
+    void processChatHistory(const json& response) 
+    {
+        if (!response.value("success", false)) {
+            cout << "无历史聊天记录" << endl;
+            return;
+        }
+        
+        if (!response.contains("messages") || !response["messages"].is_array()) {
+            cerr << "无效响应格式" << endl;
+            return;
+        }
+        
+        auto messages = response["messages"];
+        for (const auto& msg : messages) {
+            //验证消息格式
+            if (!msg.is_object() || 
+                !msg.contains("sender") || !msg["sender"].is_string() ||
+                !msg.contains("message") || !msg["message"].is_string() ||
+                !msg.contains("timestamp") || !msg["timestamp"].is_number()) {
+                cerr << "无效消息格式" << endl;
+                continue;
+            }
+            
+            // 解析时间戳
+            time_t timestamp = msg["timestamp"];
+            tm* localTime = localtime(&timestamp);
+            char timeBuffer[80];
+            strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
+            
+            // 确定消息方向
+            string sender = msg["sender"];
+            string arrow = (sender == currentUser) ? "->" : "<-";
+            string displayName = (sender == currentUser) ? "你" : sender;
+            
+            cout << "[" << timeBuffer << "] " 
+                << displayName << " " << arrow << " "
+                << msg["message"] << endl;
+        }
+        
+        cout << "========================" << endl;
     }
     
 
