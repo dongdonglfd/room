@@ -141,13 +141,10 @@ public:
             else if (choice == "2") 
             {
                 cout << "=====查找聊天记录=====: "<<endl;
-                cout<<"请输入群名: ";
-                string friendName;
-                getline(cin, friendName);
-                
-                if (!friendName.empty()) {
-                    //queryChatHistory(friendName);
-                }
+                cout<<"请输入群号: ";
+                cin>>groupid;
+                getchar();              
+                querygroupHistory(groupid);
             } 
             else if (choice == "3") {
                 // 退出系统
@@ -202,7 +199,8 @@ public:
     }
     void startgroupChat(int id)
     {
-        //displayUnreadMessagesFromFriend(friendName);
+        
+        displayUnreadMessagesFromgroup(userName);
         // 设置活动聊天状态
         inChatSession = true;
         activeid = id;
@@ -342,7 +340,164 @@ public:
             this_thread::sleep_for(chrono::milliseconds(50));
         }
     }
-   
+    void displayUnreadMessagesFromgroup(string username)
+    {
+        json request = {
+            {"type", "get_group_unread_messages"},
+            {"user", username},
+            {"groupid",groupid}
+        };
+        
+        // 发送请求并获取响应
+        //json response = sendRequest(request);
+        std::string requestStr = request.dump();
+        send(sock, requestStr.c_str(), requestStr.size(), 0);
+        char buffer[4096] = {0};
+        recv(sock, buffer, 4096, 0);
+        json response= json::parse(buffer);
+        if (!response["success"]) 
+        {
+            
+            return ;
+
+        }
+        auto messages = response["messages"];
+        for (const auto& msg : messages) {
+                string text = msg.value("message", "");
+                string timestampStr = msg.value("timestamp", "");
+                
+                // 转换时间戳为可读格式
+                struct tm tm = {};
+                strptime(timestampStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm);
+                time_t timestamp = mktime(&tm);
+                
+                char timeBuffer[80];
+                strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localtime(&timestamp));
+                
+                cout << "[" << timeBuffer << "] " << username << ": " << text << endl;
+            }
+            
+            cout << "=============================" << endl;
+            
+            // 发送确认请求，标记消息为已读
+            json ack = {
+                {"type", "ack_group_message"},
+                {"user", username},
+                {"groupid", groupid}
+            };
+            //sendRequest(ack);
+        std::string req = ack.dump();
+        send(sock, req.c_str(), req.size(), 0);
+    }
+    void querygroupHistory(int groupid)
+    {
+        json request = {
+            {"type", "get_group_history"},
+            {"user", userName},
+            {"groupid", groupid},
+        };
+        
+        std::string requestStr = request.dump();
+        
+        // 发送请求
+        if (send(sock, requestStr.c_str(), requestStr.size(), 0) < 0) {
+            perror("发送请求失败");
+            return;
+        }
+        
+        // 接收响应
+        const int initialBufferSize = 4096;
+        vector<char> buffer(initialBufferSize);
+        ssize_t totalReceived = 0;
+        
+        while (true) {
+            // 检查是否需要扩展缓冲区
+            if (totalReceived >= buffer.size() - 1) {
+                buffer.resize(buffer.size() * 2);
+            }
+            
+            // 接收数据
+            ssize_t bytesRead = recv(sock, buffer.data() + totalReceived, 
+                                    buffer.size() - totalReceived - 1, 0);
+            
+            if (bytesRead < 0) {
+                perror("接收响应失败");
+                return;
+            }
+            
+            if (bytesRead == 0) {
+                // 连接关闭
+                break;
+            }
+            
+            totalReceived += bytesRead;
+            
+            // 尝试解析 JSON
+            try {
+                // 添加终止符
+                buffer[totalReceived] = '\0';
+                
+                // 尝试解析
+                json response = json::parse(buffer.data());
+                
+                // 如果解析成功，处理响应
+                processgroupHistory(response);
+                return;
+                
+            } catch (json::parse_error& e) {
+                // 如果错误不是"unexpected end of input"，继续接收更多数据
+                if (e.id != 101) {
+                    cerr << "JSON解析错误: " << e.what() << endl;
+                    cerr << "已接收数据: " << totalReceived << "字节" << endl;
+                    return;
+                }
+            }
+        }
+        
+        // 如果循环结束但未解析成功
+        cerr << "无法解析服务器响应" << endl;
+    }
+    void processgroupHistory(const json& response) 
+    {
+        if (!response.value("success", false)) {
+            cout << "无历史聊天记录" << endl;
+            return;
+        }
+        
+        if (!response.contains("messages") || !response["messages"].is_array()) {
+            cerr << "无效响应格式" << endl;
+            return;
+        }
+        
+        auto messages = response["messages"];
+        for (const auto& msg : messages) {
+            //验证消息格式
+            if (!msg.is_object() || 
+                !msg.contains("sender") || !msg["sender"].is_string() ||
+                !msg.contains("message") || !msg["message"].is_string() ||
+                !msg.contains("timestamp") || !msg["timestamp"].is_number()) {
+                cerr << "无效消息格式" << endl;
+                continue;
+            }
+            
+            // 解析时间戳
+            time_t timestamp = msg["timestamp"];
+            tm* localTime = localtime(&timestamp);
+            char timeBuffer[80];
+            strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
+            
+            // 确定消息方向
+            string sender = msg["sender"];
+            string arrow = (sender == userName) ? "->" : "<-";
+            string displayName = (sender == userName) ? "你" : sender;
+            
+            cout << "[" << timeBuffer << "] " 
+                << displayName << " " << arrow << " "
+                << msg["message"] << endl;
+        }
+        
+        cout << "========================" << endl;
+    }
     
 
 };
