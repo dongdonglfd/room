@@ -60,7 +60,14 @@ public:
         newTermios.c_cc[VTIME] = 0;
         tcsetattr(STDIN_FILENO, TCSANOW, &newTermios);
     }
-
+    void setRawTerminalMode() {
+    struct termios raw;
+    tcgetattr(STDIN_FILENO, &raw);
+    raw.c_lflag &= ~(ICANON | ECHO);
+    raw.c_cc[VMIN] = 0;
+    raw.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
     // 恢复终端设置
     void restoreTerminal() {
         tcsetattr(STDIN_FILENO, TCSANOW, &origTermios);
@@ -71,7 +78,7 @@ public:
         // 序列化请求为JSON字符串
         string requestStr = request.dump();
         
-        // 发送请求到服务器
+        //发送请求到服务器
         {
             lock_guard<mutex> lock(outputMutex);
             if (send(sock, requestStr.c_str(), requestStr.size(), 0) < 0) {
@@ -79,6 +86,12 @@ public:
                 return {{"success", false}, {"message", "发送请求失败"}};
             }
         }
+        // std::vector<char> data(requestStr.size()+4);
+        // int _len = htonl(requestStr.size());
+        
+        // memcpy(data.data(),&_len,4);
+        // memcpy(data.data()+4,requestStr.c_str(),requestStr.size());
+        // int ret = send(sock, data.data(),data.size(),0);
         
         // 对于不需要即时响应的请求直接返回
         return {{"success", true}};
@@ -90,8 +103,7 @@ public:
             cout << "\n===== 聊天系统主菜单 =====" << endl;
             cout << "1. 开始聊天" << endl;
             cout << "2. 查看历史聊天记录" << endl;
-            cout << "3.发送文件" << endl;
-            cout << "4. 退出系统" << endl;
+            cout << "3. 退出系统" << endl;
             cout << "==========================" << endl;
             cout << "请选择操作: ";
             
@@ -118,16 +130,7 @@ public:
                     queryChatHistory(friendName);
                 }
             } 
-            if (choice == "3") {
-                // 开始聊天
-                cout << "请输入对方用户名: ";
-                string friendName;
-                getline(cin, friendName);
-                if (!friendName.empty()) {
-                    
-                }
-            }
-            else if (choice == "4") {
+            else if (choice == "3") {
                 // 退出系统
                 cout << "感谢使用，再见!" << endl;
                 running = false;
@@ -136,6 +139,47 @@ public:
                 cout << "无效选择，请重新输入!" << endl;
             }
         }
+    }
+    string readLineNonBlocking() 
+    {
+   
+        char buffer[BUFFER_SIZE];
+        string input;
+        bool lineComplete = false;
+        
+        while (!lineComplete) {
+            fd_set read_fds;
+            FD_ZERO(&read_fds);
+            FD_SET(STDIN_FILENO, &read_fds);
+            
+            struct timeval tv;
+            tv.tv_sec = 0;
+            tv.tv_usec = 10000; // 10ms
+            
+            int ready = select(STDIN_FILENO + 1, &read_fds, NULL, NULL, &tv);
+            
+            if (ready > 0 && FD_ISSET(STDIN_FILENO, &read_fds)) {
+                ssize_t bytesRead = read(STDIN_FILENO, buffer, BUFFER_SIZE - 1);
+                
+                if (bytesRead > 0) {
+                    buffer[bytesRead] = '\0';
+                    
+                    for (int i = 0; i < bytesRead; i++) {
+                        if (buffer[i] == '\n' || buffer[i] == '\r') {
+                            lineComplete = true;
+                            break;
+                        } else {
+                            input += buffer[i];
+                        }
+                    }
+                }
+            } else if (ready == 0) {
+                // 超时，没有输入
+                break;
+            }
+        }
+        
+        return input;
     }
     void startChatSession(const string& friendName) 
     {
@@ -146,13 +190,14 @@ public:
         // }
         // 设置终端为非阻塞模式
         displayUnreadMessagesFromFriend(friendName);
-        setNonBlockingTerminal();
+        //setNonBlockingTerminal();
+        //setRawTerminalMode();
         
         // 设置活动聊天状态
         inChatSession = true;
         activeRecipient = friendName;
         inputBuffer.clear();
-        
+        setvbuf(stdout, NULL, _IONBF, 0); // 禁用标准输出缓冲
         // 显示提示信息
         {
             lock_guard<mutex> lock(outputMutex);
@@ -160,53 +205,34 @@ public:
 
             cout << "> " << flush;
         }
+        while (inChatSession) 
+        {
+        // 读取整行输入
+        string inputLine = readLineNonBlocking();
         
-        char c;
-        
-        while (inChatSession && running) {
-            // 读取输入字符
-            if (read(STDIN_FILENO, &c, 1) > 0) {
-                if (c == '\n' || c == '\r') {
-                    cout << "\r\033[2K" << "> " << flush;
-                    // 处理完整输入行
-                    if (!inputBuffer.empty()) {
-                        if (inputBuffer == "/exit") {
-                            break;
-                        } 
-                        else {
-                            sendMessage(friendName, inputBuffer);
-                        }
-                        inputBuffer.clear();
-                        
-                        lock_guard<mutex> lock(outputMutex);
-                        cout << "> " << flush;
-                    }
-                } 
-                // 处理退格
-                else if (c == 127 || c == 8) { // 退格键
-                    if (!inputBuffer.empty()) {
-                        inputBuffer.pop_back();
-                        lock_guard<mutex> lock(outputMutex);
-                        cout << "\b \b" << flush; // 擦除最后一个字符
-                    }
-                } 
-                // 处理普通字符
-                else if (c >= 32 && c <= 126) { // 可打印字符
-                    inputBuffer += c;
-                    lock_guard<mutex> lock(outputMutex);
-                    cout << c << flush;
-                }
+        if (!inputLine.empty()) {
+            // 处理输入行
+            if (inputLine == "/exit") {
+                break;
             }
+            cout<<"\033[A"<< flush;
+            cout << "\r\033[2K" << "> " << flush;
+            // 发送消息
+            sendMessage(friendName, inputLine);
             
-            // 短暂休眠避免过度占用CPU
-            this_thread::sleep_for(chrono::milliseconds(50));
+            // 更新输入提示
+            cout << "\r\033[2K" << "> " << flush;
         }
-        
+        // 短暂休眠避免过度占用CPU
+        this_thread::sleep_for(chrono::milliseconds(50));
+    }
+      
+    
         // 退出聊天会话
         inChatSession = false;
         activeRecipient = "";
         inputBuffer.clear();
-        restoreTerminal();
+        //restoreTerminal();
         
         lock_guard<mutex> lock(outputMutex);
         cout << "\n退出与 " << friendName << " 的聊天" << endl;
@@ -275,16 +301,21 @@ public:
                         // 处理私聊消息
                         string sender = message.value("sender", "");
                         string text = message.value("message", "");
-                        time_t timestamp = message.value("timestamp", time(nullptr));
+                        // time_t timestamp = message.value("timestamp", time(nullptr));
                         
-                        // 格式化时间
-                        string timeStr = "Unknown time";
+                        // // 格式化时间
+                        // string timeStr = "Unknown time";
+                        // tm* localTime = localtime(&timestamp);
+                        // if (localTime) {
+                        //     char timeBuffer[80];
+                        //     strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
+                        //     timeStr = string(timeBuffer);
+                        // }
+                        time_t timestamp = message["timestamp"];
                         tm* localTime = localtime(&timestamp);
-                        if (localTime) {
-                            char timeBuffer[80];
-                            strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
-                            timeStr = string(timeBuffer);
-                        }
+                        char timeStr[80];
+                        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M", localTime);
+            
                         
                         // 显示消息（使用互斥锁保护输出）
                         {
@@ -295,17 +326,17 @@ public:
                                 cout << "> " << inputBuffer << flush; // 重新显示输入提示
                             }
                             // 否则显示通知
-                            else {
-                                cout << "\n您收到来自 " << sender << " 的新消息 (" 
-                                    << (text.length() > 20 ? text.substr(0, 20) + "..." : text) 
-                                    << ") [" << timeStr << "]" << endl;
-                                if (inChatSession) {
-                                    cout << "> " << inputBuffer << flush; // 重新显示输入提示
-                                }
-                            }
+                            // else {
+                            //     cout << "\n您收到来自 " << sender << " 的新消息 (" 
+                            //         << (text.length() > 20 ? text.substr(0, 20) + "..." : text) 
+                            //         << ") [" << timeStr << "]" << endl;
+                            //     if (inChatSession) {
+                            //         cout << "> " << inputBuffer << flush; // 重新显示输入提示
+                            //     }
+                            // }
                         }
-                        
-                        // 发送消息确认（如果提供了消息ID）
+
+                        // 发送消息确认（如果提供了消息ID）                                                 
                         if (message.contains("message_id")) {
                             json ack = {
                                 {"type", "ack_private_message"},
@@ -402,16 +433,20 @@ public:
         auto messages = response["messages"];
         for (const auto& msg : messages) {
                 string text = msg.value("message", "");
-                string timestampStr = msg.value("timestamp", "");
+                // string timestampStr = msg.value("timestamp", "");
                 
-                // 转换时间戳为可读格式
-                struct tm tm = {};
-                strptime(timestampStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm);
-                time_t timestamp = mktime(&tm);
+                // // 转换时间戳为可读格式
+                // struct tm tm = {};
+                // strptime(timestampStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm);
+                // time_t timestamp = mktime(&tm);
                 
+                // char timeBuffer[80];
+                // strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localtime(&timestamp));
+                time_t timestamp = msg["timestamp"];
+                tm* localTime = localtime(&timestamp);
                 char timeBuffer[80];
-                strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localtime(&timestamp));
-                
+                strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
+            
                 cout << "[" << timeBuffer << "] " << friendName << ": " << text << endl;
             }
             

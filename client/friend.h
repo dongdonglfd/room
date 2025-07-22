@@ -1,23 +1,13 @@
 #include"chatclient.h"
-
-// // 用户数据结构
-// struct User {
-//     std::string username;
-//     bool online = false;
-//     std::vector<std::string> friends;       // 已添加好友
-//     std::vector<std::string> friendRequests;// 待处理的好友请求
-//     std::vector<std::string> blocked;      // 屏蔽列表
-// };
+#include"fileclient.h"
 class Friend
 {
-    // private:
-    // std::map<std::string, User> users;     // 所有用户数据
-    // std::string currentUser;          // 当前登录用户
     private:
     int sock;
     std::string currentUser;        // 当前登录用户
     std::vector<std::string> friendRequests; // 待处理的好友请求
     Chat chat;
+    FileTransferClient file;
     // 发送请求并获取响应
     json sendRequest(const json& req) {
         std::string requestStr = req.dump();
@@ -51,7 +41,8 @@ class Friend
                  << "4. 查看好友列表\n"
                  << "5. 处理请求\n"
                  << "6. 与好友聊天\n"
-                 << "7. 返回上级\n"
+                 << "7. 发送文件\n"
+                 << "8. 返回上级\n"
                  << "请选择操作: ";
             
             char choice;
@@ -64,7 +55,8 @@ class Friend
                 case '4': showFriends(); break;
                 case '5': processRequest();break;//处理请求
                 case '6': showFriends();chat.privateChat(sock,currentUser);break;
-                case '7': return;
+                case '7': showFriends();file.sendFile(sock,currentUser);break;
+                case '8': return;
                 default: std::cout << "无效输入!\n";
             }
         }
@@ -238,91 +230,130 @@ class Friend
             std::cout << "[" << i+1 << "] " << friendRequests[i] << std::endl;
         }
     }
-    // void checkUnreadMessages(string currentUser,int sockfd) 
-    // {
-    //     json request = {
-    //         {"type", "get_unread_messages"},
-    //         {"user", currentUser}
-    //     };
+    
+    void checkUnreadMessages(std::string currentUser, int sockfd) 
+    {
+        json request = {
+            {"type", "get_unread_messages"},
+            {"user", currentUser}
+        };
 
-    //     int fd=sockfd;
-    //     json req=sendReq(request,fd);
-    //     if(req["success"])
-    //     {
-    //         cout<< "\n===== 未读消息 =====" << std::endl;
-    //         for (const auto& msg : req["messages"]) 
-    //         {
-    //             time_t timestamp = msg["timestamp"];
-    //             tm* localTime = localtime(&timestamp);
-    //             char timeBuffer[80];
-    //             strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
-                
-    //             cout << "[" << timeBuffer << "] " <<"有未读消息来自"
-    //                 << msg["sender"] << endl;
-    //                 //<< //msg["message"] << endl;
-    //         }
-            
-    //         cout << "=======================" << endl;
-
-    //     }
-    //     else
-    //     {
-    //         cout<< "\n===== 无未读消息 =====" << std::endl;
-    //     }
-        
-    // }
-    void checkUnreadMessages(std::string currentUser, int sockfd) {
-    json request = {
-        {"type", "get_unread_messages"},
-        {"user", currentUser}
-    };
-
-    json req = sendReq(request, sockfd);
-    if (req.is_null() || !req.is_object()) {
-        std::cerr << "Error: Invalid response from server!" << std::endl;
-        return;
-    }
-
-    bool success = false;
-    if (req.contains("success") && req["success"].is_boolean()) {
-        success = req["success"].get<bool>();
-    }
-
-    if (success) {
-        std::cout << "\n===== 未读消息 =====" << std::endl;
-        if (req.contains("messages") && req["messages"].is_array()) {
-            for (const auto& msg : req["messages"]) {
-                // 处理 timestamp
-                time_t timestamp = 0;
-                if (msg.contains("timestamp") && msg["timestamp"].is_number()) {
-                    timestamp = msg["timestamp"].get<time_t>();
-                } else {
-                    timestamp = std::time(nullptr); // 默认当前时间
-                }
-
-                // 转换为本地时间（线程安全）
-                tm localTime;
-                localtime_r(&timestamp, &localTime);
-
-                char timeBuffer[80];
-                strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", &localTime);
-
-                // 处理 sender
-                std::string sender = "未知用户";
-                if (msg.contains("sender") && msg["sender"].is_string()) {
-                    sender = msg["sender"].get<std::string>();
-                }
-
-                std::cout << "[" << timeBuffer << "] 有未读消息来自 " << sender << std::endl;
-            }
-        } else {
-            std::cerr << "Error: 'messages' is missing or not an array!" << std::endl;
+        json req = sendReq(request, sockfd);
+        if (req.is_null() || !req.is_object()) {
+            std::cerr << "Error: Invalid response from server!" << std::endl;
+            return;
         }
-        std::cout << "=======================" << std::endl;
-    } else {
-        std::cout << "\n===== 无未读消息 =====" << std::endl;
+
+        bool success = false;
+        if (req.contains("success") && req["success"].is_boolean()) {
+            success = req["success"].get<bool>();
+        }
+
+        if (success) {
+            std::cout << "\n===== 私聊未读消息 =====" << std::endl;
+            if (req.contains("messages") && req["messages"].is_array()) {
+                for (const auto& msg : req["messages"]) {
+                    // 处理 timestamp
+                    // time_t timestamp = 0;
+                    // if (msg.contains("timestamp") && msg["timestamp"].is_number()) {
+                    //     timestamp = msg["timestamp"].get<time_t>();
+                    // } else {
+                    //     timestamp = std::time(nullptr); // 默认当前时间
+                    // }
+
+                    // // 转换为本地时间（线程安全）
+                    // tm localTime;
+                    // localtime_r(&timestamp, &localTime);
+
+                    // char timeBuffer[80];
+                    // strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", &localTime);
+
+                    // 处理 sender
+                    std::string sender = "未知用户";
+                    // 解析时间戳
+                    time_t timestamp = msg["timestamp"];
+                    tm* localTime = localtime(&timestamp);
+                    char timeBuffer[80];
+                    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
+             if (msg.contains("sender") && msg["sender"].is_string()) {
+                        sender = msg["sender"].get<std::string>();
+                    }
+
+                    std::cout <<"["<<msg["type"].get<std::string>()<<"]"<< "[" << timeBuffer << "] 有未读消息来自 " << sender << std::endl;
+                }
+            } else {
+                std::cerr << "Error: 'messages' is missing or not an array!" << std::endl;
+            }
+            std::cout << "=======================" << std::endl;
+        } else {
+            std::cout << "\n===== 无未读消息 =====" << std::endl;
+        }
+
     }
-}
+    void checkgroupUnreadMessages(std::string currentUser, int sockfd)
+    {
+        json request = {
+            {"type", "get_unreadgroup_messages"},
+            {"user", currentUser}
+        };
+
+        json req = sendReq(request, sockfd);
+        if (req.is_null() || !req.is_object()) {
+            std::cerr << "Error: Invalid response from server!" << std::endl;
+            return;
+        }
+
+        bool success = false;
+        if (req.contains("success") && req["success"].is_boolean()) {
+            success = req["success"].get<bool>();
+        }
+
+        if (1) {
+            std::cout << "\n===== 群聊未读消息 =====" << std::endl;
+            if (req.contains("messages") && req["messages"].is_array()) {
+                for (const auto& msg : req["messages"]) {
+                    // 处理 timestamp
+        //             time_t timestamp = 0;
+        //             if (msg.contains("timestamp") && msg["timestamp"].is_number()) {
+        //                 timestamp = msg["timestamp"].get<time_t>();
+        //             } else {
+        //                 timestamp = std::time(nullptr); // 默认当前时间
+        //             }
+
+        //             // 转换为本地时间（线程安全）
+        //             // tm localTime;
+        //             // localtime_r(&timestamp, &localTime);
+        //             // 2. 转换为时间结构体
+        // // 转换为本地时间结构体
+        // tm timeInfo;
+        // if (localtime_r(&timestamp, &timeInfo) == nullptr) {
+        //     throw std::runtime_error("时间转换失败");
+        // }
+
+        //             char timeBuffer[80];
+        //             strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", &timeInfo);
+             // 解析时间戳
+            time_t timestamp = msg["timestamp"];
+            tm* localTime = localtime(&timestamp);
+            char timeBuffer[80];
+            strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M", localTime);
+            
+                    // 处理 sender
+                    std::string sender = "未知用户";
+                    if (msg.contains("sender") && msg["sender"].is_string()) {
+                        sender = msg["sender"].get<std::string>();
+                    }
+
+                    std::cout <<"["<<msg["type"].get<std::string>()<<msg["groupid"]<<"]"<< "[" << timeBuffer << "] 有未读消息来自 " << sender << std::endl;
+                }
+            } else {
+                std::cerr << "Error: 'messages' is missing or not an array!" << std::endl;
+            }
+            std::cout << "=======================" << std::endl;
+        } else {
+            std::cout << "\n===== 无未读消息 =====" << std::endl;
+        }
+    }
     
 
 };

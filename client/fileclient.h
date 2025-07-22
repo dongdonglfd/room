@@ -428,10 +428,11 @@ public:
             }
             
             totalSent += sent;
-            // 每10MB显示一次进度
-        // if (totalSent % (10 * 1024 * 1024) == 0 || totalSent == fileSize) {
-        //     showProgress(totalSent, fileSize);
-        // }
+            //每10MB显示一次进度
+        if (totalSent % (10 * 1024 * 1024) == 0 || totalSent == fileSize) {
+            showProgress(totalSent, fileSize);
+        }
+        cout.flush();
         }
         
         // 6. 检查完整性

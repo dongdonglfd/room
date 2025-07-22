@@ -1,21 +1,5 @@
-#include<iostream>
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<string.h>
-#include<arpa/inet.h>
-#include<sys/epoll.h>
-#include<string>
-#include <termios.h> // 密码输入处理
-#include <iomanip>
-#include <nlohmann/json.hpp>
-#include </usr/include/x86_64-linux-gnu/curl/curl.h>
-#include<vector>
-#include <map>
-#include <algorithm>
- 
-using json = nlohmann::json;
-class Group
+#include "groupchat.h"
+class Group :public  groupchat
 {
     private:
     int sock;
@@ -59,7 +43,7 @@ class Group
                  case '5': viewGroupInfo(); break;
                  case '6': leaveGroup(); break;
                  case '7': manageGroupMembers(); break;
-                // case '8': groupChat(); break;
+                 case '8': groupChat(sock,currentUser); break;
                 case '9': return;
                 default: std::cout << "无效输入!\n";
             }

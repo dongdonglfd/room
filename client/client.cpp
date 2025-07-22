@@ -58,11 +58,13 @@ private:
         // 等待服务器响应
         std::string response = receiveMessage();
         json result = json::parse(response);
-
+        
         if (result["success"]) {
             current_user = username;
             is_authenticated = true;
             std::cout << "\n登录成功! 欢迎 " << username << std::endl;
+            checkUnreadMessages(username,sockfd);
+            checkgroupUnreadMessages(username,sockfd);
             return true;
         } else {
             std::cerr << "\n登录失败: " << result["message"] << std::endl;
@@ -229,22 +231,22 @@ public:
         while (!is_authenticated) {
             showLoginMenu();
             
-            int choice;
+            char choice;
             std::cin >> choice;
             std::cin.ignore(); // 清除输入缓冲
 
             switch (choice) {
-                case 1:
+                case '1':
                     if (processLogin()) {
                         showMainInterface();
                     }
                     break;
-                case 2:
+                case '2':
                     processRegistration();
                     break;
-                case 3:
+                case '3':
                     handleForgotPassword();    
-                case 4:
+                case '4':
                     close(sockfd);
                     exit(0);
                 default:
@@ -312,14 +314,14 @@ public:
                  << "4. 退出系统\n"
                  << "请选择操作: ";
             
-            int choice;
+            char choice;
             std::cin >> choice;
             
             switch(choice) {
-                case 1: friendMenu(sockfd,current_user); break;
-                case 2: groupMenu(sockfd,current_user); break;
-                // case 3: chatMenu(); break;
-                case 4: return;
+                case '1': friendMenu(sockfd,current_user); break;
+                case '2': groupMenu(sockfd,current_user); break;
+                // case '3': chatMenu(); break;
+                case '4': return;
                 default: std::cout << "无效输入!\n";
             }
         }
