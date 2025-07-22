@@ -14,25 +14,41 @@ private:
     
     string name;
     Friendserver mysql;
+    Chat chat;
 
     // 处理客户端请求
     void handleClient(int client_fd) {
-        char buffer[4096];
+         char buffer[4096];
         ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer));
+        if(bytes_read > 0 )
+        {
+            json re = json::parse(string(buffer, bytes_read));
+            string type = re["type"];
+            if(type == "file_chunk")
+                cout<<type<<endl;
+        }
         if(bytes_read <= 0) {
+            cout<<"1111111111111111111"<<endl;
             close(client_fd);
             return;
         }
-
+        // int len=0;
+        // read(client_fd, &len, 4);
+        // len = ntohl(len);
+        // char *data = (char *)malloc(len + 1);
+        // ssize_t bytes_read=read(client_fd, buffer, len);
+        // data[len] = '\0';
+        // strcpy(buffer,data);
         try {
             json req = json::parse(string(buffer, bytes_read));
             string type = req["type"];
+            cout<<type<<endl;
 
             if(type == "register") {
                 handleRegister(client_fd, req);
             } else if(type == "login") {
                 handleLogin(client_fd, req);
-                userOnline(name, client_fd);
+                chat.userOnline(name, client_fd);
             } else if(type == "msg") {
                 handleMessage(client_fd, req);
             }else if(type == "send_code") {
@@ -74,15 +90,47 @@ private:
             }else if(type=="remove_group_member"){
                 handleRemoveGroupMember(client_fd, req);
             }else if(type=="check_friend_valid"){
-                handleCheckFriendValid(client_fd, req);
+                chat.handleCheckFriendValid(client_fd, req);
             }else if(type == "send_message") {
-                handlePrivateMessage(client_fd, req);
+                chat.handlePrivateMessage(client_fd, req);
             }else if(type=="ack_private_message"){
-                handleAckPrivateMessage(client_fd, req);
+                chat.handleAckPrivateMessage(client_fd, req);
             }else if(type=="get_unread_messages"){
-                checkUnreadMessages(client_fd, req);
+                chat.checkUnreadMessages(client_fd, req);
             }else if(type=="get_friend_unread_messages"){
-                handleGetFriendUnreadMessages(client_fd, req);
+                chat.handleGetFriendUnreadMessages(client_fd, req);
+            }else if(type=="get_chat_history"){
+                chat.handleChatHistoryRequest(client_fd, req);
+            }else if(type=="file_upload_request"){
+                handleFileUploadRequest(client_fd, req);
+            }else if(type=="file_start"){
+                cout<<"file_start"<<endl;
+                handleFileStart(req,client_fd);
+            }else if(type=="file_chunk"){
+                cout<<"file_chunk"<<endl;
+                //handleFileChunk(req,client_fd);
+                string filePath = req["file_path"];
+                json response = {
+                    {"success", true},
+                    {"file_path", filePath}
+                };
+                
+                string responseStr = response.dump();
+                send(client_fd, responseStr.c_str(), responseStr.size(), 0);
+                        handleFileData(client_fd, filePath);
+                    }else if(type=="file_end"){
+                        cout<<"file_end"<<endl;
+                        handleFileEnd(req,client_fd);
+            }else if (type == "group_message") {
+                handleGroupMessage(client_fd,req);
+            }else if (type=="get_unreadgroup_messages"){
+                checkgroupUnreadMessages(client_fd, req);
+            }else if(type=="get_group_unread_messages"){
+                handleGetGroupUnreadMessages(client_fd, req);
+            }else if(type=="ack_group_message"){
+                handleAckGroupMessage(client_fd, req);
+            }else if(type=="get_group_history"){
+                handleGetGroupHistory(client_fd, req);
             }
             
             
@@ -143,7 +191,7 @@ private:
             
             if(res->next()) {
                 if(res->getString("password") == password) {
-                    lock_guard<mutex> lock(online_mutex);
+                    lock_guard<mutex> lock(chat.online_mutex);
                     online_users[name] = fd;
                     response["success"] = true;
                     response["username"] = name;
@@ -312,7 +360,7 @@ private:
     }
     // 处理消息转发
     void handleMessage(int fd, const json& req) {
-        lock_guard<mutex> lock(online_mutex);
+        lock_guard<mutex> lock(chat.online_mutex);
         string target = req["target"];
         if(online_users.count(target)) {
             string msg = req.dump();

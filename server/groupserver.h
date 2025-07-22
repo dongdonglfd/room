@@ -1,6 +1,6 @@
 #include "Friendserver.h"
-
-class groupserver
+// #include "groupchatserver.h"
+class groupserver: public groupchat
 {
     public:
     Friendserver mysql;
@@ -750,5 +750,43 @@ class groupserver
         send(fd, response.dump().c_str(), response.dump().size(), 0);
 
     }
+    void handleAckGroupMessage(int client_sock, const json& data)
+    {
+        if (!data.contains("user") || !data["user"].is_string() ||
+        !data.contains("groupid") || !data["groupid"].is_number()) {
+        json errorResponse = {
+            {"success", false},
+            {"message", "无效请求: 缺少必要参数"}
+        };
+        sendResponse(client_sock, errorResponse);
+            return;
+        }
+
+        string username = data["user"];
+        int groupid = data["groupid"];
+        
+        unique_ptr<sql::Connection> con(getDBConnection());
+        if (!con) {
+            json errorResponse = {
+                {"success", false},
+                {"message", "数据库连接失败"}
+            };
+            sendResponse(client_sock, errorResponse);
+            return;
+        }
+        unique_ptr<sql::PreparedStatement> stmt(
+                con->prepareStatement(
+                    "DELETE FROM offline_messages "
+                    "WHERE recipient_username = ? AND group_id = ?"
+                )
+            );
+            stmt->setString(1, username);
+            stmt->setInt(2, groupid);
+            stmt->executeUpdate();
+    }
+    
+        
+
+    
 
 };

@@ -1,40 +1,9 @@
-#include <iostream>
-#include <string>
-#include <unordered_map>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <thread>
-#include <mysql/mysql.h>
-#include <nlohmann/json.hpp>
-#include <sys/epoll.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include<fcntl.h>
-#include"threadpool.h"
-#include </usr/include/mysql_driver.h>       // MySQL驱动头文件
-#include <mysql_connection.h>  // 连接类头文件
-#include <cppconn/prepared_statement.h> // 预处理语句
-#include </usr/include/x86_64-linux-gnu/curl/curl.h>
-#include <time.h>
-
-
-using namespace std;
-using json = nlohmann::json;
-using namespace sql;
-
-// 数据库配置
-const string DB_HOST = "tcp://127.0.0.1:3306";
-const string DB_USER = "chatuser";   // 数据库账户名
-const string DB_PASS = "123";  // 数据库账户密码
-const string DB_NAME = "chat";
-
-class Friendserver
+#include"fileserver.h"
+class Friendserver:public Chat,public FileTransferServer
 {
-public:
-    mutex online_mutex;
-    unordered_map<string, int> online_users; // 在线用户表
+// public:
+//     mutex online_mutex;
+//     unordered_map<string, int> online_users; // 在线用户表
 public:
     Connection* getDBConnection() {
     try {
@@ -60,11 +29,11 @@ public:
     }
     return nullptr;
 }
-    // 添加用户到在线列表
-    void userOnline(const std::string& username, int socket) {
-        std::lock_guard<std::mutex> lock(online_mutex);
-        online_users[username] = socket;
-    }
+    // // 添加用户到在线列表
+    // void userOnline(const std::string& username, int socket) {
+    //     std::lock_guard<std::mutex> lock(online_mutex);
+    //     online_users[username] = socket;
+    // }
     void handleAddFriend(int fd, const json& req) 
     {
         string requester = req["from"];

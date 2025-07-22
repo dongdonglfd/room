@@ -18,6 +18,14 @@
 #include <cppconn/prepared_statement.h> // 预处理语句
 #include </usr/include/x86_64-linux-gnu/curl/curl.h>
 #include <time.h>
+#include <fstream>
+#include <openssl/sha.h>  // 提供 SHA256_CTX 定义
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <iomanip>
+#include <sstream>
+#include <openssl/buffer.h>
+#include <sys/stat.h>
 
 
 using namespace std;
@@ -37,12 +45,12 @@ struct Message {
     uint64_t message_id;
     bool delivered = false;
 };
-
+ unordered_map<string, int> online_users; // 在线用户表
 class Chat
 {
     public:
      mutex online_mutex;
-     unordered_map<string, int> online_users; // 在线用户表
+    //  unordered_map<string, int> online_users; // 在线用户表
      //std::unordered_map<std::string, UserSession> online_users;   // 在线用户
     std::mutex online_users_mutex;
     
@@ -248,9 +256,11 @@ class Chat
             json response;
             response["type"] = "unread_messages";
             response["user"] = username;
-            
+            int messageCount = 0;
             // 检查是否有未读消息
             if (!res->next()) {
+                
+            json messagesArray = json::array();
                 // 没有未读消息
                 response["success"] = true;
                 response["message"] = "没有未读消息";
@@ -259,7 +269,7 @@ class Chat
             } else {
                 // 有未读消息
                 json messagesArray = json::array();
-                int messageCount = 0;
+                
 
                 // 重置结果集指针到开头
                 res->beforeFirst();
@@ -267,8 +277,9 @@ class Chat
                 // 遍历所有未读消息
                 while (res->next()) {
                     json messageObj;
+                    messageObj["type"]="private";
                     messageObj["sender"] = res->getString("sender");
-                    messageObj["timestamp"] = res->getString("timestamp");
+                    messageObj["timestamp"] = res->getInt64("timestamp");
                     
                     messagesArray.push_back(messageObj);
                     messageCount++;
@@ -278,7 +289,9 @@ class Chat
                 response["count"] = messageCount;
                 response["messages"] = messagesArray;
             }
-
+             
+            // response["success"] = true;
+            // response["messages"] = messagesArray; 
             // 序列化响应为JSON字符串
             string responseStr = response.dump();
             
@@ -310,6 +323,7 @@ class Chat
             send(fd, responseStr.c_str(), responseStr.size(), 0);
         }
     }
+    
     void handleGetFriendUnreadMessages(int fd, const json& req)
     {
         string username = req["user"];
@@ -348,7 +362,7 @@ class Chat
                 json messageObj;
                 messageObj["id"] = res->getInt("id");
                 messageObj["message"] = res->getString("message");
-                messageObj["timestamp"] = res->getString("timestamp");
+                messageObj["timestamp"] = res->getInt64("timestamp");
                 
                 messagesArray.push_back(messageObj);
             }
