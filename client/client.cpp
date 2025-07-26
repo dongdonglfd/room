@@ -310,8 +310,7 @@ public:
             std::cout << "\n==== 主菜单 ====\n"
                  << "1. 好友管理\n"
                  << "2. 群组管理\n"
-                 << "3. 聊天功能\n"
-                 << "4. 退出系统\n"
+                 << "3. 退出系统\n"
                  << "请选择操作: ";
             
             char choice;
@@ -321,7 +320,7 @@ public:
                 case '1': friendMenu(sockfd,current_user); break;
                 case '2': groupMenu(sockfd,current_user); break;
                 // case '3': chatMenu(); break;
-                case '4': return;
+                case '3': return;
                 default: std::cout << "无效输入!\n";
             }
         }
@@ -330,11 +329,13 @@ public:
 int main(int argc,char **argv)
 {
     std::string addr="127.0.0.1";
+    address="127.0.0.1";
     int port=0;
     port=PORT;
     if(argc >= 2)
     {
         addr=argv[1];
+        address=argv[1];
     }
     if(argc >= 3)
     {

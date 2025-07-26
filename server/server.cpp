@@ -21,11 +21,13 @@ private:
          char buffer[4096];
         ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer));
         if(bytes_read > 0 )
-        {
-            json re = json::parse(string(buffer, bytes_read));
-            string type = re["type"];
-            if(type == "file_chunk")
-                cout<<type<<endl;
+        {cout<<"22222222222"<<endl;
+        cout<<buffer<<endl;
+        
+            // json re = json::parse(string(buffer, bytes_read));
+            // string type = re["type"];
+            // if(type == "file_chunk")
+            //     cout<<type<<endl;
         }
         if(bytes_read <= 0) {
             cout<<"1111111111111111111"<<endl;
@@ -33,7 +35,7 @@ private:
             return;
         }
         // int len=0;
-        // read(client_fd, &len, 4);
+        // read(client_fd, &len, 4);heck_friend_vali
         // len = ntohl(len);
         // char *data = (char *)malloc(len + 1);
         // ssize_t bytes_read=read(client_fd, buffer, len);
@@ -106,21 +108,9 @@ private:
             }else if(type=="file_start"){
                 cout<<"file_start"<<endl;
                 handleFileStart(req,client_fd);
-            }else if(type=="file_chunk"){
-                cout<<"file_chunk"<<endl;
-                //handleFileChunk(req,client_fd);
-                string filePath = req["file_path"];
-                json response = {
-                    {"success", true},
-                    {"file_path", filePath}
-                };
-                
-                string responseStr = response.dump();
-                send(client_fd, responseStr.c_str(), responseStr.size(), 0);
-                        handleFileData(client_fd, filePath);
-                    }else if(type=="file_end"){
-                        cout<<"file_end"<<endl;
-                        handleFileEnd(req,client_fd);
+            }else if(type=="file_end"){
+                cout<<"file_end"<<endl;
+                handleFileEnd(req,client_fd);
             }else if (type == "group_message") {
                 handleGroupMessage(client_fd,req);
             }else if (type=="get_unreadgroup_messages"){
@@ -131,6 +121,10 @@ private:
                 handleAckGroupMessage(client_fd, req);
             }else if(type=="get_group_history"){
                 handleGetGroupHistory(client_fd, req);
+            }else if(type=="get_undelivered_files"){
+                getUndeliveredFiles(client_fd, req);
+            }else if(type=="download_file"){
+                privatefilesend(req,client_fd);
             }
             
             
