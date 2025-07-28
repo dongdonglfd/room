@@ -42,7 +42,8 @@ class Friend
                  << "5. 处理请求\n"
                  << "6. 与好友聊天\n"
                  << "7. 发送文件\n"
-                 << "8. 返回上级\n"
+                 << "8. 接收文件\n"
+                 << "9. 返回上级\n"
                  << "请选择操作: ";
             
             char choice;
@@ -56,7 +57,8 @@ class Friend
                 case '5': processRequest();break;//处理请求
                 case '6': showFriends();chat.privateChat(sock,currentUser);break;
                 case '7': showFriends();file.sendFile(sock,currentUser);break;
-                case '8': return;
+                case '8': file.getUndeliveredFiles(sock,currentUser);break;
+                case '9': return;
                 default: std::cout << "无效输入!\n";
             }
         }

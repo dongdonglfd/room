@@ -386,28 +386,29 @@ public:
         }
         
     }
-    bool isValidFriend(const std::string& friendName) 
-    {
-        // if (friendName == currentUser) {
-        //     return false;
-        // }
+    // bool isValidFriend(const std::string& friendName) 
+    // {
+    //     // if (friendName == currentUser) {
+    //     //     return false;
+    //     // }
         
-        // //向服务器查询
-        // json req;
-        // req["type"] = "check_friend_valid";
-        // req["user"] = currentUser;
-        // req["friend"] = friendName;
-        // json res = sendRequest(req);
-        // bool isValid = false;
-        // if (res["success"]) {
-        //     isValid = res["valid"];
-        // } else {
-        //     // 查询失败时保守处理
-        //     std::cerr << "✘ 好友验证失败: " << res["message"] << std::endl;
-        //     isValid = false;
-        // }
-        // return isValid;
-    }
+    //     // //向服务器查询
+    //     // json req;
+    //     // req["type"] = "check_friend_valid";
+    //     // req["user"] = currentUser;
+    //     // req["friend"] = friendName;
+    //     // json res = sendRequest(req);
+    //     // bool isValid = false;
+    //     // if (res["success"]) {
+    //     //     isValid = res["valid"];
+    //     // } else {
+    //     //     // 查询失败时保守处理
+    //     //     std::cerr << "✘ 好友验证失败: " << res["message"] << std::endl;
+    //     //     isValid = false;
+    //     // }
+    //     // return isValid;
+    //     //return true;
+    // }
     void displayUnreadMessagesFromFriend(const string& friendName)
     {
         
